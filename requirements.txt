@@ -1,0 +1,13 @@
+streamlit==1.46.0
+python-dotenv==1.1.0
+openai==1.88.0
+tqdm==4.67.1
+PyMuPDF==1.26.1
+chromadb==1.0.13
+langchain==0.3.25
+langchain-community==0.3.25
+langchain-openai==0.3.24
+protobuf==4.25.3
+faiss-cpu==1.7.4
+wheel
+numpy<2.0

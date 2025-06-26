@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+*.DS_Store
+.chroma/
+.temp_chroma/
+.env
+.devcontainer/
+app.py
+
+
