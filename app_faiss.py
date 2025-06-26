@@ -10,6 +10,8 @@ from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
 import base64
+from langchain.chains.combine_documents.stuff import StuffDocumentsChain
+from langchain.chains import LLMChain
 
 # --- Load env ---
 load_dotenv()
@@ -70,14 +72,25 @@ memory = ConversationBufferMemory(
     return_messages=False
 )
 
-qa_chain = ConversationalRetrievalChain.from_llm(
-    llm=llm,
+stuff_chain = StuffDocumentsChain(
+    llm_chain=LLMChain(llm=llm, prompt=custom_prompt),
+    document_variable_name="context"
+)
+
+
+question_generator = LLMChain(llm=llm, prompt=PromptTemplate(
+    input_variables=["chat_history", "question"],
+    template="Given the following conversation and a follow up question, rephrase the follow up question to be a standalone question.\n\nChat History:\n{chat_history}\nFollow Up Input: {question}\nStandalone question:"
+))
+
+qa_chain = ConversationalRetrievalChain(
     retriever=retriever,
     memory=memory,
+    combine_docs_chain=stuff_chain,
+    question_generator=question_generator,
     return_source_documents=True,
     output_key="answer"
 )
-
 
 # --- Streamlit UI ---
 st.set_page_config(page_title="Ask Mahitha (Portfolio QA)", layout="centered", initial_sidebar_state="collapsed")
@@ -86,7 +99,6 @@ st.set_page_config(page_title="Ask Mahitha (Portfolio QA)", layout="centered", i
 if "history" not in st.session_state:
     st.session_state.history = []
 
-# Remove the default top padding and menu
 st.markdown("""
     <style>
         #MainMenu {visibility: hidden;}
@@ -103,44 +115,56 @@ with open("mahitha_bg.jpeg", "rb") as image_file:
 st.markdown(
     f"""
     <style>
-    /* Shared background */
     .stApp {{
+        background: 
+            linear-gradient(
+                rgba(255, 255, 255, 0.95), 
+                rgba(255, 255, 255, 0.95)
+            ),
+            url("data:image/jpeg;base64,{encoded}");
+        background-size: cover;
+        background-position: top center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        filter: blur(0px);
+    }}
+
+    /* Apply blur only to the background using a pseudo-element */
+        .stApp::before {{
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
         background-image: url("data:image/jpeg;base64,{encoded}");
         background-size: cover;
         background-position: top center;
         background-repeat: no-repeat;
         background-attachment: fixed;
+        filter: blur(1px);
+        z-index: -999;
+        opacity: 0.2;
     }}
-    
-    /* Light theme overlay */
-    .stApp::before {{
-        content: "";
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        z-index: -1;
-        background: linear-gradient(
-            rgba(255, 255, 255, 0.97), 
-            rgba(255, 255, 255, 0.97)
-        ), 
-        url("data:image/jpeg;base64,{encoded}");
-        background-size: cover;
-        background-position: top center;
-        background-repeat: no-repeat;
-        background-attachment: fixed;
-        backdrop-filter: blur(3px);
+
+    /* Remove the after pseudo-element */
+    .stApp::after {{
+        display: none;
     }}
 
     /* Dark theme overlay */
     @media (prefers-color-scheme: dark) {{
-        .stApp::before {{
-            background: linear-gradient(
-                rgba(14, 17, 23, 0.97), 
-                rgba(14, 17, 23, 0.97)
+        .stApp {{
+            background: 
+                linear-gradient(
+                    rgba(14, 17, 23, 0.95), 
+                    rgba(14, 17, 23, 0.95)
             ), 
             url("data:image/jpeg;base64,{encoded}");
+        }}
+
+        .stApp::before {{
+            opacity: 0.1;
         }}
     }}
 
@@ -393,15 +417,64 @@ st.markdown(
         box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2) !important;
     }}
 
-    /* Chat History Styling */
-    div[data-testid="stMarkdown"] p:contains("🧑 You"),
-    div[data-testid="stMarkdown"] p:contains("📄 Answer") {{
-        background: rgba(255, 255, 255, 0.9) !important;
+    /* Chat History Styling - Light Theme Only */
+    div[data-testid="stMarkdown"]:has(p:contains("🧑 You")),
+    div[data-testid="stMarkdown"]:has(p:contains("📄 Answer")) {{
         padding: 1rem 1.5rem !important;
         border-radius: 0.75rem !important;
         margin: 0.75rem 0 !important;
         box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1) !important;
         backdrop-filter: blur(10px) !important;
+    }}
+
+    /* Style containers that immediately follow answer containers (for bullet points) - Light Theme */
+    div[data-testid="stMarkdown"]:has(p:contains("📄 Answer")) + div[data-testid="stMarkdown"],
+    div[data-testid="stMarkdown"]:has(p:contains("📄 Answer")) + div[data-testid="stMarkdown"] + div[data-testid="stMarkdown"],
+    div[data-testid="stMarkdown"]:has(p:contains("📄 Answer")) + div[data-testid="stMarkdown"] + div[data-testid="stMarkdown"] + div[data-testid="stMarkdown"] {{
+        padding: 1rem 1.5rem !important;
+        border-radius: 0.75rem !important;
+        margin: 0.25rem 0 !important;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1) !important;
+        backdrop-filter: blur(10px) !important;
+        border-top: 2px solid rgba(255, 255, 255, 0.5) !important;
+    }}
+
+    /* Alternative approach: Style all markdown containers that contain lists - Light Theme */
+    div[data-testid="stMarkdown"]:has(ul):not(.main-intro-container),
+    div[data-testid="stMarkdown"]:has(ol):not(.main-intro-container) {{
+        padding: 1rem 1.5rem !important;
+        border-radius: 0.75rem !important;
+        margin: 0.25rem 0 !important;
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1) !important;
+        backdrop-filter: blur(10px) !important;
+    }}
+
+    /* Light Theme - White Backgrounds */
+    @media (prefers-color-scheme: light) {{
+        div[data-testid="stMarkdown"]:has(p:contains("🧑 You")),
+        div[data-testid="stMarkdown"]:has(p:contains("📄 Answer")),
+        div[data-testid="stMarkdown"]:has(p:contains("📄 Answer")) + div[data-testid="stMarkdown"],
+        div[data-testid="stMarkdown"]:has(p:contains("📄 Answer")) + div[data-testid="stMarkdown"] + div[data-testid="stMarkdown"],
+        div[data-testid="stMarkdown"]:has(p:contains("📄 Answer")) + div[data-testid="stMarkdown"] + div[data-testid="stMarkdown"] + div[data-testid="stMarkdown"],
+        div[data-testid="stMarkdown"]:has(ul):not(.main-intro-container),
+        div[data-testid="stMarkdown"]:has(ol):not(.main-intro-container) {{
+            background: rgba(255, 255, 255, 0.9) !important;
+        }}
+    }}
+
+    /* Remove nested styling conflicts */
+    div[data-testid="stMarkdown"]:has(p:contains("🧑 You")) p,
+    div[data-testid="stMarkdown"]:has(p:contains("📄 Answer")) p,
+    div[data-testid="stMarkdown"]:has(p:contains("🧑 You")) ul,
+    div[data-testid="stMarkdown"]:has(p:contains("📄 Answer")) ul,
+    div[data-testid="stMarkdown"]:has(p:contains("🧑 You")) ol,
+    div[data-testid="stMarkdown"]:has(p:contains("📄 Answer")) ol,
+    div[data-testid="stMarkdown"]:has(p:contains("🧑 You")) li,
+    div[data-testid="stMarkdown"]:has(p:contains("📄 Answer")) li {{
+        background: transparent !important;
+        margin: 0.25rem 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
     }}
 
     @media (prefers-color-scheme: dark) {{
@@ -419,9 +492,21 @@ st.markdown(
             border: 2px solid rgba(52, 152, 219, 0.8) !important;
         }}
 
-        div[data-testid="stMarkdown"] p:contains("🧑 You"),
-        div[data-testid="stMarkdown"] p:contains("📄 Answer") {{
+        /* Dark Theme - Dark Backgrounds for ALL chat containers */
+        div[data-testid="stMarkdown"]:has(p:contains("🧑 You")),
+        div[data-testid="stMarkdown"]:has(p:contains("📄 Answer")),
+        div[data-testid="stMarkdown"]:has(p:contains("📄 Answer")) + div[data-testid="stMarkdown"],
+        div[data-testid="stMarkdown"]:has(p:contains("📄 Answer")) + div[data-testid="stMarkdown"] + div[data-testid="stMarkdown"],
+        div[data-testid="stMarkdown"]:has(p:contains("📄 Answer")) + div[data-testid="stMarkdown"] + div[data-testid="stMarkdown"] + div[data-testid="stMarkdown"],
+        div[data-testid="stMarkdown"]:has(ul):not(.main-intro-container),
+        div[data-testid="stMarkdown"]:has(ol):not(.main-intro-container) {{
             background: rgba(14, 17, 23, 0.9) !important;
+            border-top: 2px solid rgba(255, 255, 255, 0.1) !important;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3) !important;
+        }}
+
+        .stApp::before {{
+            opacity: 0.1;
         }}
     }}
     </style>
@@ -467,7 +552,7 @@ if submitted and query:
             )
         elif any(phrase in query.lower() for phrase in ["where is she now", "current job", "currently working", "where does she work now"]):
             response = (
-                "Mahitha Reddy is currently working at **McKinsey & Co.** in Texas "
+        "Mahitha Reddy is currently working at **McKinsey & Co.** in Texas "
                 "as a **Software Engineer (Computer Systems Analyst)**."
             )
         else:
@@ -481,10 +566,8 @@ if submitted and query:
         st.session_state.history.insert(0, ("🧑 You", query))
         st.session_state.history.insert(0, ("📄 Answer", response))
 
-# --- Clear Chat ---
 if st.button("🗑️ Clear Chat"):
     st.session_state.history = []
 
-# --- Chat Display ---
 for role, msg in st.session_state.history:
     st.markdown(f"**{role}:** {msg}")
