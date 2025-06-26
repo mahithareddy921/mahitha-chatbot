@@ -78,31 +78,6 @@ qa_chain = ConversationalRetrievalChain.from_llm(
     output_key="answer"
 )
 
-# --- Streamlit UI ---
-st.set_page_config(page_title="Mahitha Portfolio Assistant", layout="centered")
-
-st.markdown("""
-### 👋 Hey, I’m Mahitha!  
-You’re in the right place if you're looking for someone who codes, creates & caffeinates responsibly ☕💻  
-
-**Curious to know more about me?**  
-Why just read when you can interact? Talk to my chatbot — it’s been trained on me, by me, for you 🤖💬 
-
----
-
-#### 💡 Try asking things like:
-- **What programming languages does Mahitha know?**
-- **What certifications does Mahitha have?**
-- **What are Mahitha’s hobbies or interests?**
-- **What are her career goals?**
-
-Get creative — if it’s in the resume or personal profile, my bot will know 😄 
-
-Go ahead, ask away!
-""")
-
-if "history" not in st.session_state:
-    st.session_state.history = []
 
 # --- Streamlit UI ---
 st.set_page_config(page_title="Ask Mahitha (Portfolio QA)", layout="centered", initial_sidebar_state="collapsed")
